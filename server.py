@@ -84,25 +84,90 @@ class StoreHTTPRequestHandler(SimpleHTTPRequestHandler):
         expected = row["value"] if row else "0206"
         return str(pin).strip() == str(expected).strip()
 
+    def send_file(self, file_path, content_type=None):
+        try:
+            p = Path(file_path).resolve()
+            if not p.is_file():
+                return self.send_friendly_404(str(file_path))
+
+            if not content_type:
+                content_type, _ = mimetypes.guess_type(str(p))
+                content_type = content_type or "application/octet-stream"
+                if content_type.startswith("text/") or content_type in ("application/javascript", "application/json"):
+                    content_type += "; charset=utf-8"
+
+            with open(p, "rb") as f:
+                body = f.read()
+
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception as e:
+            self.send_friendly_404(str(file_path))
+
+    def send_friendly_404(self, requested_path):
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Page Not Found - VISHWAKARMA HARDWARE & SANITARY</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; text-align: center; background: #f8fafc;">
+  <div class="glass-panel" style="max-width: 500px; padding: 3rem 2rem; position: relative; z-index: 10;">
+    <div style="font-size: 3.5rem; margin-bottom: 1rem;">🔍</div>
+    <h2 style="font-size: 1.5rem; font-weight: 800; margin-bottom: 0.5rem; color: #0f172a;">Page Not Found (404)</h2>
+    <p style="color: #64748b; font-size: 0.95rem; margin-bottom: 2rem;">
+      The requested link <code>{requested_path}</code> was not found. Please click below to navigate:
+    </p>
+    <div style="display: flex; gap: 0.85rem; justify-content: center; flex-wrap: wrap;">
+      <a href="/" class="btn btn-primary" style="padding: 0.75rem 1.4rem;">
+        <span>🏬 Go to Storefront</span>
+      </a>
+      <a href="/admin" class="btn btn-glass" style="padding: 0.75rem 1.4rem;">
+        <span>🔐 Owner Admin Portal</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>"""
+        body = html.encode("utf-8")
+        self.send_response(404)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
 
-        # Route web pages
-        if path == "/" or path == "/index.html":
-            self.path = "/index.html"
-            return super().do_GET()
-        elif path == "/admin" or path == "/admin.html":
-            self.path = "/admin.html"
-            return super().do_GET()
+        clean_path = path.strip("/").lower()
 
-        # Route API
-        if path.startswith("/api/"):
+        # 1. Customer Storefront
+        if clean_path in ("", "index", "index.html", "home"):
+            return self.send_file(PUBLIC_DIR / "index.html", "text/html; charset=utf-8")
+
+        # 2. Owner Admin Portal (handles /admin, /admin/, /Admin, /admin.html, /portal, /login)
+        elif clean_path in ("admin", "admin.html", "portal", "login"):
+            return self.send_file(PUBLIC_DIR / "admin.html", "text/html; charset=utf-8")
+
+        # 3. Route API endpoints
+        elif path.startswith("/api/"):
             return self.handle_api_get(path, qs)
 
-        # Static assets
-        return super().do_GET()
+        # 4. Static assets (CSS, JS, images)
+        rel_path = path.lstrip("/")
+        target_file = (PUBLIC_DIR / rel_path).resolve()
+        if target_file.is_file() and str(target_file).startswith(str(PUBLIC_DIR)):
+            return self.send_file(target_file)
+
+        # 5. Friendly Fallback
+        return self.send_friendly_404(path)
 
     def handle_api_get(self, path, qs):
         conn = get_db()

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: vishwakarma-hardware
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: "python init_db.py"
+    startCommand: "python server.py"
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: PYTHON_VERSION
+        value: 3.12.0

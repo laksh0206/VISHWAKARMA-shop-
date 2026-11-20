@@ -12,7 +12,15 @@ import json
 import os
 from pathlib import Path
 
-DB_FILE = Path(__file__).parent / "store.db"
+BASE_DIR = Path(__file__).parent.resolve()
+DB_FILE = BASE_DIR / "store.db"
+
+# Ensure all frontend files exist on Render build
+try:
+    from embedded_assets import restore_missing_assets
+    restore_missing_assets(BASE_DIR)
+except Exception as e:
+    print(f"Asset check note: {e}")
 
 # The user explicitly requested an empty catalog so they can add their own products via the Admin Portal
 SAMPLE_PRODUCTS = []

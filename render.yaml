@@ -1,13 +1,21 @@
 services:
   - type: web
-    name: vishwakarma-hardware
-    env: python
-    region: singapore
-    plan: free
-    buildCommand: "python init_db.py"
-    startCommand: "python server.py"
+    name: vishwakarma-hardware-sanitary
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
-      - key: PORT
-        value: 10000
-      - key: PYTHON_VERSION
-        value: 3.12.0
+      - key: NODE_VERSION
+        value: 20
+      - key: ADMIN_PIN
+        value: "0206"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATA_FILE
+        value: /opt/render/project/src/data/catalog.json
+    disk:
+      name: catalog-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
